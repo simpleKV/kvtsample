@@ -3,7 +3,7 @@ a sample code for kvt
 install
 ========
 ```
-git clone github.com/simpleKV/kvtsample
+git clone https://github.com/simpleKV/kvtsample.git
 cd kvtsample
 
 go get github.com/simpleKV/kvt
