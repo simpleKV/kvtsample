@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"log"
 	"unsafe"
 
 	"github.com/simpleKV/kvt"
@@ -19,7 +18,8 @@ type Order struct {
 }
 
 // produce a primary key(pk) from a Order object,
-// save in the main bucket
+// save as Key in the main bucket
+// save as Value in index bucket
 func (this *Order) Key() ([]byte, error) {
 	return kvt.Bytes(kvt.Ptr(&this.ID), unsafe.Sizeof(this.ID)), nil
 }
@@ -52,35 +52,39 @@ func (this *Order) order_idx_Type_Status() ([]byte, error) {
 }
 
 // unmarshal []byte to your obj
-func order_valueDecode(b []byte, obj kvt.KVer) (kvt.KVer, error) {
+func orderUnmarshal(b []byte, obj kvt.KVer) (kvt.KVer, error) {
 	r := bytes.NewReader(b)
 	dec := gob.NewDecoder(r)
-	var c *Order
-	if obj != nil {
-		c = obj.(*Order)
-	} else {
-		c = &Order{}
+
+	c, ok := obj.(*Order)
+	if !ok {
+		c = new(Order)
 	}
-	dec.Decode(c)
-	log.Println("decode Order:", c)
+	if err := dec.Decode(c); err != nil {
+		return nil, err
+	}
 	return c, nil
 }
 
 func makeKVT() *kvt.KVT {
 	kp := kvt.KVTParam{
 		Bucket:    "bkt_Order",
-		Unmarshal: order_valueDecode,
+		Unmarshal: orderUnmarshal,
 		Indexs: []kvt.IndexInfo{
 			//self define index, 3 key infos: index name,  index fields and index function
-			//fields is optional, will parse from index name when omitted, fields should match with the struct field name
-			//index name is also optional, will user index function name if ommit index name
+			//index name can't omit, you can spec a full path as file path
 			//index has 2 types, common index("idx_"), multi index with prefix "midx_"
-			//index name prefis is one of (pk_, idx, midx_), is arbitrary if you supply index fields
-			//index function name is arbitrary, match with index name is a better choice
-			//index can't ommit
+			//index name is arbitrary if you supply index fields(except the prefix)
+			//fields is optional, will parse from index name when omits, fields should match with the struct field name
+			//index function name is arbitrary, match with index name is a better choice, it called by Index(idx_name)
 			{
-				Name: "idx_Type_Status",
+				Name: "bkt_Order/idx_Type_Status", //under bkt_Order, so it will not conflict with other idx
+				//Name: "idx_Type_Status", //same with above, will extract fields: ["Type", "Status"]
 				//Fields: []string{"Type", "Status"}, //Fields is optional, when omit, will parse from the index name
+
+				//you can also spec path with fields as below, it will not depend on bkt_Order
+				//Name: "[root/path/to/]idx_xyz"
+				//Fields: []string{"Type", "Status"},
 			},
 		},
 	}
