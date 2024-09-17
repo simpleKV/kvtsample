@@ -53,4 +53,9 @@ func main() {
 		fmt.Println(r[i])
 	}
 
+	fmt.Println("begin query by time")
+	r = QueryByTime(2010, 2012)
+	for i := range r {
+		fmt.Println(r[i])
+	}
 }

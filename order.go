@@ -4,17 +4,19 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"time"
 	"unsafe"
 
 	"github.com/simpleKV/kvt"
 )
 
 type Order struct {
-	ID     uint64
-	Type   string
-	Status uint16
-	Name   string
-	Num    int
+	ID         uint64
+	Type       string
+	Status     uint16
+	Name       string
+	Num        int
+	UpdateTime time.Time
 }
 
 // produce a primary key(pk) from a Order object,
@@ -39,16 +41,26 @@ func (this *Order) Value() ([]byte, error) {
 func (this *Order) Index(name string) ([]byte, error) {
 	switch name {
 	case "idx_Type_Status":
-		return this.order_idx_Type_Status()
+		return this.idx_Type_Status()
+	case "idx_UpdateTime":
+		return this.idx_UpdateTime()
 	}
-	return nil, fmt.Errorf("Index not found")
+	return nil, fmt.Errorf(kvt.ErrIndexNotFound, name)
 }
 
 // a union index function: Type and Status
 // this index function produce a key of idx bucket, and the value is primary key(order_pk_ID produce)
-func (this *Order) order_idx_Type_Status() ([]byte, error) {
+func (this *Order) idx_Type_Status() ([]byte, error) {
 	ret := kvt.MakeIndexKey(nil, []byte(this.Type), kvt.Bytes(kvt.Ptr(&this.Status), unsafe.Sizeof(this.Status)))
 	return ret, nil
+}
+
+// another index, we support multi index on one struct
+func (this *Order) idx_UpdateTime() ([]byte, error) {
+	key := kvt.MakeIndexKey(make([]byte, 0, 20),
+		[]byte(this.UpdateTime.Format(time.RFC3339))) //every index should append primary key at end
+
+	return key, nil
 }
 
 // unmarshal []byte to your obj
@@ -85,6 +97,10 @@ func makeKVT() *kvt.KVT {
 				//you can also spec path with fields as below, it will not depend on bkt_Order
 				//Name: "[root/path/to/]idx_xyz"
 				//Fields: []string{"Type", "Status"},
+			},
+			{
+				Name: "idx_UpdateTime", //single path name, auto under bkt_Order, otherwise may conflict
+				//omit fields will parse from name: ["UpdateTime"]
 			},
 		},
 	}
